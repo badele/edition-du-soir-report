@@ -1,0 +1,101 @@
+body {
+  font-family: "Open Sans", sans-serif;
+  line-height: 1.25;
+}
+
+table caption {
+  font-size: 1.5em;
+  margin: .5em 0 .75em;
+}
+
+table {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  border-spacing: 0;
+}
+
+table tr {
+  background-color: #f8f8f8;
+  padding: .35em;
+}
+
+table th, table td {
+  padding: .6em;
+  color: #808080;
+  background-color: #222222;
+}
+
+table th.center, table td.center {
+  text-align: center;
+}
+
+table th.left, table td.left {
+  text-align: left;
+}
+
+table th {
+  position: sticky;
+  top: 0;
+  font-size: .85em;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgb(107, 124, 117);
+  background-color: #383838;
+}
+
+span.good {
+  color: rgb(63, 242, 69);
+}
+
+span.unknow {
+  color: rgb(246, 255, 89)
+}
+
+span.bad {
+  color: rgb(239, 73, 41);
+}
+
+@media screen and (max-width: 600px) {
+  table {
+    border: 0;
+  }
+  table caption {
+    font-size: 1.3em;
+  }
+  table thead {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+  }
+  table tbody {
+    height: 5em;
+  }
+  table tr {
+    border-bottom: 3px solid #ddd;
+    display: block;
+    margin-bottom: .6em;
+  }
+  table td {
+    border-bottom: 1px solid #ddd;
+    display: block;
+    font-size: .8em;
+    text-align: right;
+    color: #808080;
+    background-color: #222222;
+  }
+  table td::before {
+    content: attr(data-label);
+    float: left;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  table td:last-child {
+    border-bottom: 0;
+  }
+}

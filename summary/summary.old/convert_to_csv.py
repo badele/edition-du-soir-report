@@ -370,7 +370,10 @@ for idx, item in df.iterrows():
         <td class="left" data-label="{column}_1j"><span class="{stylecolor7j}">{item[f'trend_diff_{column}_7j']} {eval(f'var_diff_7j')}</span> ({eval(f'diff_7j')})</td>
         """
 
-html+="""    </tr>
+    html += """
+    </tr>"""
+
+html+="""
 </tbody>
 </table>"""
 

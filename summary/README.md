@@ -3,6 +3,7 @@
 ## Init env
 
 ```
+# Depuis la racine du projet
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -10,10 +11,10 @@ pip install -r requirements.txt
 
 ```
 # Get last datas
-rm -rf /tmp/opencovid19
-git clone git@github.com:opencovid19-fr/data.git /tmp/opencovid19
+#rm -rf /tmp/opencovid19
+#git clone git@github.com:opencovid19-fr/data.git /tmp/opencovid19
 
 # Convert datas
 source .venv/bin/activate
-python convert_to_csv.py -p /tmp/opencovid19/ministere-sante > index.html
+python summary/convert_to_csv.py -p /tmp/opencovid19/ministere-sante > summary/index.html
 ```

@@ -12,12 +12,13 @@ table {
   margin: 0;
   padding: 0;
   width: 100%;
-  border-spacing: 0;
+  border-collapse: collapse;
 }
 
 table tr {
   background-color: #f8f8f8;
   padding: .35em;
+  border: 1px solid #444444;
 }
 
 table th, table td {
@@ -32,6 +33,10 @@ table th.center, table td.center {
 
 table th.left, table td.left {
   text-align: left;
+}
+
+table td.field {
+  border-left: 1px solid #444444;
 }
 
 table th {

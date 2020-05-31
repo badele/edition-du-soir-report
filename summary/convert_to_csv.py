@@ -13,7 +13,9 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.width', 1000)
 
 # ReadItem, if not exists, set 0 value
-def readItem(item,itemname):
+
+
+def readItem(item, itemname):
     if itemname not in item['donneesNationales']:
         return 0
 
@@ -25,124 +27,125 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--path",	help="Git repo Path")
 args = vars(ap.parse_args())
 
-################################
-# Read opencovid19 YAML datas
-################################
-
-# Get yaml files list
-searchpath=args['path']
-files = [os.path.join(searchpath, f) for f in os.listdir(searchpath) if f.rfind('.yaml')>=0 and os.path.isfile(os.path.join(searchpath, f))]
-files = sorted(files)
-
-# Generate data lists
-deltas = []
-datas = []
-for filename in files:
-    with open(filename, 'r') as f:
-        # Get Yaml item
-        item = yaml.safe_load(f)
-
-        # Add to datas array
-        data = (
-            item['date'],
-            readItem(item,'casConfirmes'),
-            readItem(item,'hospitalises'),
-            readItem(item,'gueris'),
-            readItem(item,'reanimation'),
-            readItem(item,'deces'),
-            readItem(item,'casEhpad'),
-            readItem(item,'casConfirmesEhpad'),
-            readItem(item,'decesEhpad')
-            )
-        datas.append(data)
-
-days = [1,3,7,15]
+# Init columns informations
+days = [1,  7]
 fieldscolumn = OrderedDict()
-fieldscolumn={
-    'casConfirmes':{
-        'total':True,
+fieldscolumn = {
+    'cas_confirmes': {
+        'total': True,
     },
-    'hospitalises':{
-        'total':False
+    'hospitalises': {
+        'total': False
     },
-    'gueris':{
-        'total':True
+    'nouvelles_hospitalisations': {
+        'total': False
     },
-    'reanimation':{
-        'total':False
+    'gueris': {
+        'total': True,
+        'reverse': True
+
     },
-    'deces':{
-        'total':True
+    'reanimation': {
+        'total': False
     },
-    'casEhpad':{
-        'total':True
+    'nouvelles_reanimations': {
+        'total': False
     },
-    'casConfirmesEhpad':{
-        'total':True
+    'deces': {
+        'total': True
+
     },
-    'decesEhpad':{
-        'total':True
+    'cas_ehpad': {
+        'total': True
+
+    },
+    'cas_confirmes_ehpad': {
+        'total': True
+
+    },
+    'deces_ehpad': {
+        'total': True
+
     }
 }
 
-# Convert to dataframe
-columns = ['date']
-columns.extend(fieldscolumn)
-df=pd.DataFrame(
-    datas,
-    columns=columns
+
+# Read OpenCovid19 datas
+orig = pd.read_csv(
+    'https://raw.githubusercontent.com/opencovid19-fr/data/master/dist/chiffres-cles.csv',
+    sep=','
 )
-df = df.set_index('date')
+orig = orig.set_index('date')
+
+# Create mask
+mask_MSS = (orig['source_type'] ==
+            'ministere-sante') & (orig['granularite'] == 'pays')
+
+mask_OC19 = (orig['source_type'] ==
+             'opencovid19-fr') & (orig['granularite'] == 'pays')
+
+df_MSS = orig[mask_MSS]
+df_OC19 = orig[mask_OC19]
+
+# Merge datas
+df = df_MSS
+df['nouvelles_hospitalisations'] = df_OC19['nouvelles_hospitalisations']
+df['nouvelles_reanimations'] = df_OC19['nouvelles_reanimations']
 
 # Compute fields
 for field in fieldscolumn:
-    for d in days :
-        if not fieldscolumn[field]['total'] and d>1:
-            df[f'avg_{field}_{d}j'] = df[field].rolling(window=d).mean().round(4)
+    for d in days:
+        if not fieldscolumn[field]['total'] and d > 1:
+            df[f'avg_{field}_{d}j'] = df[field].rolling(
+                window=d).mean().round(4)
 
         df[f'diff_{field}_{d}j'] = df[field].diff(periods=d)
         df[f'var_{field}_{d}j'] = df[field].pct_change(periods=d).round(4)
-        df[f'var_diff_{field}_{d}j'] = df[f'diff_{field}_{d}j'].pct_change(periods=1).round(4)
+        df[f'var_diff_{field}_{d}j'] = df[f'diff_{field}_{d}j'].pct_change(
+            periods=1).round(4)
 
 
 # Order columns
-dfcolumns=[]
+dfcolumns = []
+subfields = ['var', 'diff', 'avg', 'var_diff']
 for field in fieldscolumn:
     dfcolumns.append(field)
 
-    # Avg
-    if not fieldscolumn[field]['total']:
-        for d in days :
-            if d > 1:
-                dfcolumns.append(f'avg_{field}_{d}j')
+for subfield in subfields:
+    for d in days:
+        for field in fieldscolumn:
 
-    # Global Variation
-    for d in days :
-        # Keep only positive value
-        if not fieldscolumn[field]['total']:
-            mask = df[f'var_{field}_{d}j']<0
-            df[mask][f'var_{field}_{d}j'] = np.nan
+            # Avg
+            if subfield == 'avg':
+                if not fieldscolumn[field]['total']:
+                    if d > 1:
+                        dfcolumns.append(f'{subfield}_{field}_{d}j')
 
-        dfcolumns.append(f'var_{field}_{d}j')
+            # Global Variation
+            if subfield == 'var':
+                # Keep only positive value
+                if not fieldscolumn[field]['total']:
+                    mask = df[f'{subfield}_{field}_{d}j'] < 0
+                    df[mask][f'{subfield}_{field}_{d}j'] = np.nan
 
-    # Diff
-    for d in days :
-        dfcolumns.append(f'diff_{field}_{d}j')
+                dfcolumns.append(f'{subfield}_{field}_{d}j')
 
-    # differential variation
-    for d in days :
-        dfcolumns.append(f'var_diff_{field}_{d}j')
+            # Diff
+            if subfield == 'diff':
+                dfcolumns.append(f'{subfield}_{field}_{d}j')
+
+            # differential variation
+            if subfield == 'var_diff':
+                dfcolumns.append(f'{subfield}_{field}_{d}j')
 
 
 # Save to CSV Raw
 df = df[dfcolumns]
-df.to_csv('/tmp/summary.csv',sep=';')
-
+df.to_csv('/tmp/summary.csv', sep=';')
 
 ####################
 # Compute trend
 ####################
-
 
 # Add trend column
 for column in df.columns:
@@ -151,106 +154,159 @@ for column in df.columns:
         df[column] = (df[column]*100.0).round(4)
 
         # Compute trend
-        trendcol = column.replace('var_','trend_')
+        trendcol = column.replace('var_', 'trend_')
 
         # positive=['⬌','⬈','⬈⬈','⬈⬈⬈']
         # negative=['⬌','⬊','⬊⬊','⬊⬊⬊']
 
-        notrend='⬌'
-        positive=[notrend,'⬈','⬈','⬈']
-        negative=[notrend,'⬊','⬊','⬊']
+        notrend = '⬌'
+        positive = [notrend, '⬈', '⬈', '⬈']
+        negative = [notrend, '⬊', '⬊', '⬊']
 
         # Init new colmn
-        unknow='?'
-        df[trendcol]=unknow
+        unknow = '?'
+        df[trendcol] = unknow
 
-        # Negative values
-        # mask = df[column] == -np.inf
-        # df[trendcol][mask] = 'X'
-
-        # mask = (df[column]<=0) & (df[column]>-5)
-        # df[trendcol][mask] = negative[0]
-
-        mask = (df[column]<=-5) & (df[column]>-25)
+        mask = (df[column] <= -5) & (df[column] > -25)
         df[trendcol][mask] = negative[1]
 
-        mask = (df[column]<=-25) & (df[column]>-50)
+        mask = (df[column] <= -25) & (df[column] > -50)
         df[trendcol][mask] = negative[2]
 
-        mask = df[column]<=-50
+        mask = df[column] <= -50
         df[trendcol][mask] = negative[3]
 
-        mask = (df[column]>=-5) & (df[column]<5)
+        mask = (df[column] >= -5) & (df[column] < 5)
         df[trendcol][mask] = positive[0]
 
-        mask = (df[column]>=5) & (df[column]<25)
+        mask = (df[column] >= 5) & (df[column] < 25)
         df[trendcol][mask] = positive[1]
 
-        mask = (df[column]>=25) & (df[column]<50)
+        mask = (df[column] >= 25) & (df[column] < 50)
         df[trendcol][mask] = positive[2]
 
-        mask = df[column]>=50
+        mask = df[column] >= 50
         df[trendcol][mask] = positive[3]
 
 
-    # No mouvement
+# No mouvement
 for field in fieldscolumn:
-    for d in days :
-        mask = (df[f'diff_{field}_{d}j'] == 0) & (df[f'trend_diff_{field}_{d}j'] == unknow)
+    for d in days:
+        mask = (df[f'diff_{field}_{d}j'] == 0) & (
+            df[f'trend_diff_{field}_{d}j'] == unknow)
         df[f'var_diff_{field}_{d}j'][mask] = 0
         df[f'trend_diff_{field}_{d}j'][mask] = notrend
 
-
-outcolumns = [
-    'casConfirmes',
-    'diff_casConfirmes_1j',
-    'var_diff_casConfirmes_1j',
-    'trend_diff_casConfirmes_1j',
-    'diff_casConfirmes_7j',
-    'var_diff_casConfirmes_7j',
-    'trend_diff_casConfirmes_7j',
-
+outfieldcolumns = [
+    'cas_confirmes',
     'hospitalises',
-    'diff_hospitalises_1j',
-    'var_diff_hospitalises_1j',
-    'trend_diff_hospitalises_1j',
-    'diff_hospitalises_7j',
-    'var_diff_hospitalises_7j',
-    'trend_diff_hospitalises_7j',
-
+    'nouvelles_hospitalisations',
     'gueris',
-    'diff_gueris_1j',
-    'var_diff_gueris_1j',
-    'trend_diff_gueris_1j',
-    'diff_gueris_7j',
-    'var_diff_gueris_7j',
-    'trend_diff_gueris_7j',
-
     'reanimation',
-    'diff_reanimation_1j',
-    'var_diff_reanimation_1j',
-    'trend_diff_reanimation_1j',
-    'diff_reanimation_7j',
-    'var_diff_reanimation_7j',
-    'trend_diff_reanimation_7j',
-
+    'nouvelles_reanimations',
     'deces',
-    'diff_deces_1j',
-    'var_diff_deces_1j',
-    'trend_diff_deces_1j',
-    'diff_deces_7j',
-    'var_diff_deces_7j',
-    'trend_diff_deces_7j',
-]
+    'cas_confirmes_ehpad',
+    'cas_ehpad',
+    'deces_ehpad']
+
+outstatscolumns = ['diff', 'var_diff', 'trend_diff']
+
+outcolumns = outfieldcolumns.copy()
+for outfield in outfieldcolumns:
+    for d in days:
+        for statcolumn in outstatscolumns:
+            outcolumns.append(f'{statcolumn}_{outfield}_{d}j')
 
 
 df = df[outcolumns]
-df.to_csv('/tmp/trend.csv',sep=';')
+df.to_csv('/tmp/trend.csv', sep=';')
 
 ######################
 # Generate HTML pages
 ######################
-html="""<html lang="fr">
+htmlcolumn = ['cas_confirmes', 'hospitalises', 'nouvelles_hospitalisations',
+              'gueris', 'reanimation', 'nouvelles_reanimations', 'deces',
+              'cas_ehpad', 'cas_confirmes_ehpad', 'deces_ehpad']
+
+
+def GetHhtmlInfo(item, column):
+    diff_1j = str(item[f'diff_{column}_1j'])
+    diff_1j = diff_1j.replace('nan', '')
+    if diff_1j != '' and '-' not in diff_1j:
+        diff_1j = f'+{item[f"diff_{column}_1j"]}'
+        diff_1j = diff_1j.replace('.0', '')
+
+    var_diff_1j = str(item[f'var_diff_{column}_1j'])
+    var_diff_1j = var_diff_1j.replace('nan', '')
+    if var_diff_1j != '' and '-' not in var_diff_1j:
+        var_diff_1j = f'+{item[f"var_diff_{column}_1j"]}'
+
+    if var_diff_1j != '':
+        var_diff_1j += '%'
+
+    diff_7j = str(item[f'diff_{column}_7j'])
+    diff_7j = diff_7j.replace('nan', '')
+    if diff_7j != '' and '-' not in diff_7j:
+        diff_7j = f'+{item[f"diff_{column}_7j"]}'
+        diff_7j = diff_7j.replace('.0', '')
+
+    var_diff_7j = str(item[f'var_diff_{column}_7j'])
+    var_diff_7j = var_diff_7j.replace('nan', '')
+    if var_diff_7j != '' and '-' not in var_diff_7j:
+        var_diff_7j = f'+{item[f"var_diff_{column}_7j"]}'
+
+    if var_diff_7j != '':
+        var_diff_7j += '%'
+
+    state = ['bad', 'good', 'unknow']
+
+    # 1j
+    if item[f'trend_diff_{column}_1j'] in positive[1:]:
+        # Bad
+        styleidx = 0
+    elif item[f'trend_diff_{column}_1j'] in negative[1:]:
+        # Good
+        styleidx = 1
+    else:
+        # Unknow
+        styleidx = 2
+
+    # Reverse trend if needed
+    if 'reverse' in fieldscolumn[column] and fieldscolumn[column]['reverse'] and styleidx <= 1:
+        styleidx = styleidx ^ 1
+
+    stylecolor1j = state[styleidx]
+
+    # 7j
+    if item[f'trend_diff_{column}_7j'] in positive[1:]:
+        # Good
+        styleidx = 0
+    elif item[f'trend_diff_{column}_7j'] in negative[1:]:
+        # Bad
+        styleidx = 1
+    else:
+        # Unknow
+        styleidx = 2
+
+    # Reverse trend if needed
+    if 'reverse' in fieldscolumn[column] and fieldscolumn[column]['reverse'] and styleidx <= 1:
+        styleidx = styleidx ^ 1
+
+    stylecolor7j = state[styleidx]
+
+    line = f"""<span class="{stylecolor1j}">{item[f'trend_diff_{column}_1j']}</span></br>"""
+    line += f"""<span class="{stylecolor1j}">{var_diff_1j}</span> ({diff_1j})</br>"""
+    line += "<br>"
+    line += f"""<span class="{stylecolor7j}">{item[f'trend_diff_{column}_7j']}</span></br>"""
+    line += f"""<span class="{stylecolor7j}">{var_diff_7j}</span> ({diff_7j})</br>"""
+
+    line = f"""<span class="{stylecolor1j}">{item[f'trend_diff_{column}_1j']}&nbsp;{var_diff_1j}</span>&nbsp;({diff_1j})</br>"""
+    line += f"""<span class="{stylecolor7j}">{item[f'trend_diff_{column}_7j']}&nbsp;{var_diff_7j}</span>&nbsp;({diff_7j})</br>"""
+
+    return line
+
+
+html = """<html lang="fr">
 <head>
   <meta charset="utf-8">
 
@@ -266,112 +322,35 @@ html="""<html lang="fr">
   <caption>Rapport</caption>
   <thead>
     <tr>
-      <th class='center' scope="col" rowspan="2" colspan="1">Date</th>
-      <th class='center' scope="col" colspan="3">Cas confirmés</th>
-      <th class='center' scope="col" colspan="3">Hospitalises</th>
-      <th class='center' scope="col" colspan="3">Guéris</th>
-      <th class='center' scope="col" colspan="3">Réanimations</th>
-      <th class='center' scope="col" colspan="3">Décès</th>
-    </tr>
-    <tr>
-      <th class='center' scope="col">Nb</th>
-      <th class='left' scope="col">1j</th>
-      <th class='left' scope="col">7j</th>
-      <th class='center' scope="col">Nb</th>
-      <th class='left' scope="col">1j</th>
-      <th class='left' scope="col">7j</th>
-      <th class='center' scope="col">Nb</th>
-      <th class='left' scope="col">1j</th>
-      <th class='left' scope="col">7j</th>
-      <th class='center' scope="col">Nb</th>
-      <th class='left' scope="col">1j</th>
-      <th class='left' scope="col">7j</th>
-      <th class='center' scope="col">Nb</th>
-      <th class='left' scope="col">1j</th>
-      <th class='left' scope="col">7j</th>
+      <th class='center' scope="col" >Date</th>
+"""
+for column in htmlcolumn:
+    html += f"""<th class='center' scope="col" colspan=2 >{column}</th>"""
+
+html += f"""
     </tr>
   </thead>
   <tbody>
 """
 
-htmlcolumn=['casConfirmes','hospitalises','gueris','reanimation','deces']
+
+df = df.iloc[::-1]
 
 for idx, item in df.iterrows():
     html += f"""
     <tr>
-      <td class="center" scope="row" data-label="cas_confirmes">{idx}</td>
+      <td class="center" scope="row" data-label="date">{idx}</td>
 """
 
     for column in htmlcolumn:
+        html += f"""<td class="center field" scope="row" data-label="{column}">{item[column]}</td>"""
+        html += f"""<td class="center" scope="row" data-label="{column}_trend">"""
+        html += GetHhtmlInfo(item, column)
+        html += "</td>"
 
-        diff_1j = str(item[f'diff_{column}_1j'])
-        diff_1j = diff_1j.replace('nan','')
-        if diff_1j!='' and '-' not in diff_1j:
-            diff_1j = f'+{item[f"diff_{column}_1j"]}'
-            diff_1j = diff_1j.replace('.0','')
+    html += "</tr>"
 
-
-        var_diff_1j = str(item[f'var_diff_{column}_1j'])
-        var_diff_1j = var_diff_1j.replace('nan','')
-        if var_diff_1j!='' and '-' not in var_diff_1j:
-            var_diff_1j = f'+{item[f"var_diff_{column}_1j"]}'
-
-        if var_diff_1j != '':
-            var_diff_1j += '%'
-
-
-        diff_7j = str(item[f'diff_{column}_7j'])
-        diff_7j = diff_7j.replace('nan','')
-        if diff_7j!='' and '-' not in diff_7j:
-            diff_7j = f'+{item[f"diff_{column}_7j"]}'
-            diff_7j = diff_7j.replace('.0','')
-
-
-        var_diff_7j = str(item[f'var_diff_{column}_7j'])
-        var_diff_7j = var_diff_7j.replace('nan','')
-        if var_diff_7j!='' and '-' not in var_diff_7j:
-            var_diff_7j = f'+{item[f"var_diff_{column}_7j"]}'
-
-        if var_diff_7j != '':
-            var_diff_7j += '%'
-
-        ###############
-        # casConfirmes
-        ###############
-
-        # 1j
-        stylecolor=""
-        if item[f'trend_diff_{column}_1j'] in positive[1:]:
-            stylecolor1j="good"
-        elif item[f'trend_diff_{column}_1j'] in negative[1:]:
-            stylecolor1j="bad"
-        else:
-            stylecolor1j="unknow"
-
-        # 7j
-        stylecolor=""
-        if item[f'trend_diff_{column}_7j'] in positive[1:]:
-            stylecolor7j="good"
-        elif item[f'trend_diff_{column}_7j'] in negative[1:]:
-            stylecolor7j="bad"
-        else:
-            stylecolor7j="unknow"
-
-
-        # html += f"""
-        #   <td class="center" data-label="confirmes_nb">{item[f'{column}']}</td>
-        #   <td class="left" data-label="{column}_1j"><span class="{stylecolor1j}">{item[f'trend_diff_{column}_1j']} {eval(f'var_diff_{column}_1j')}</span> ({eval(f'diff_{column}_1j')})</td>
-        #   <td class="left" data-label="{column}_7j"><span class="{stylecolor1j}">{item[f'trend_diff_{column}_7j']} {eval(f'var_diff_{column}_7j')}</span> ({eval(f'diff_{column}_7j')})</td>
-        # """
-
-        html += f"""
-        <td class="center" data-label="{column}_nb">{item[f'{column}']}</td>
-        <td class="left" data-label="{column}_1j"><span class="{stylecolor1j}">{item[f'trend_diff_{column}_1j']} {eval(f'var_diff_1j')}</span> ({eval(f'diff_1j')})</td>
-        <td class="left" data-label="{column}_1j"><span class="{stylecolor7j}">{item[f'trend_diff_{column}_7j']} {eval(f'var_diff_7j')}</span> ({eval(f'diff_7j')})</td>
-        """
-
-html+="""    </tr>
-</tbody>
+html += """</tbody>
 </table>"""
 
 

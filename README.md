@@ -20,6 +20,28 @@ Aujourd'hui, cette collection offre une vision synthétique des événements, da
 
 Concrètement, la présentation prend la forme d'un slideshow revealjs, exportable au format pdf et postscript, [hébergé sur github](https://guillaumefe.github.io/edition-du-soir-report).
 
+## Génération du rapport quotidien
+
+```
+# A executer qu'une fois(la premiere fois)
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+```
+source .venv/bin/activate
+
+# Get last datas
+#rm -rf /tmp/opencovid19
+#git clone git@github.com:opencovid19-fr/data.git /tmp/opencovid19
+
+# Convert datas
+source .venv/bin/activate
+python convert_to_csv.py -p /tmp/opencovid19/ministere-sante > index.html
+```
+
+
 ## Contributors ✨
 
 Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
